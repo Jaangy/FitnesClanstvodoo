@@ -1,0 +1,71 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import Layout from './components/layout/Layout';
+import RequireAuth from './components/auth/RequireAuth';
+
+// Pages
+import HomePage from './pages/HomePage';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import ClassesPage from './pages/ClassesPage';
+import MembersPage from './pages/MembersPage';
+import UnauthorizedPage from './pages/UnauthorizedPage';
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Layout>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/unauthorized" element={<UnauthorizedPage />} />
+            
+            {/* Protected Routes */}
+            <Route 
+              path="/dashboard" 
+              element={
+                <RequireAuth>
+                  <DashboardPage />
+                </RequireAuth>
+              } 
+            />
+            
+            <Route 
+              path="/classes" 
+              element={
+                <RequireAuth>
+                  <ClassesPage />
+                </RequireAuth>
+              } 
+            />
+            
+            <Route 
+              path="/members" 
+              element={
+                <MembersPage />
+              } 
+            />
+            
+            {/* Admin Routes */}
+            <Route 
+              path="/admin/*" 
+              element={
+                <RequireAuth allowedRoles={['admin']}>
+                  <DashboardPage />
+                </RequireAuth>
+              } 
+            />
+            
+            {/* Redirect all other paths to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </Router>
+    </AuthProvider>
+  );
+}
+
+export default App;
