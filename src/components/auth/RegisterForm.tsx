@@ -78,16 +78,37 @@ const RegisterForm: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Sign up with Supabase Auth
+      // 1. Check if user already exists
+      const { data: existingUser, error: existingUserError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (existingUser?.user) {
+        setError('An account with this email already exists. Please sign in instead.');
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        if (authError.message === 'User already registered') {
+          setError('An account with this email already exists. Please sign in instead.');
+          return;
+        }
+        throw authError;
+      }
 
       if (authData.user) {
-        // 2. Insert user data into users table
+        // Wait briefly to ensure auth session is established
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 3. Insert user data into users table
         const { error: userError } = await supabase
           .from('users')
           .insert([
@@ -104,7 +125,7 @@ const RegisterForm: React.FC = () => {
 
         if (userError) throw userError;
 
-        // 3. Create default membership
+        // 4. Create default membership
         const { error: membershipError } = await supabase
           .from('memberships')
           .insert([

@@ -53,13 +53,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .from('users')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      if (data) setCurrentUser(data as User);
+      
+      if (!data) {
+        console.log('No user data found for ID:', userId);
+        setCurrentUser(null);
+        return;
+      }
+
+      setCurrentUser(data as User);
     } catch (err) {
       console.error('Error fetching user data:', err);
       setError('Error fetching user data');
+      setCurrentUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -82,7 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .from('users')
         .select('*')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
 
       if (userError) throw userError;
       if (!userData) throw new Error('User data not found');
