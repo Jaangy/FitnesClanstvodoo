@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { User, UserRole } from '../types';
-import { allUsers } from '../data/mockData';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -23,53 +23,83 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for saved user in localStorage
-    const savedUser = localStorage.getItem('fitnessAppUser');
-    if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      } else {
+        setCurrentUser(null);
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const fetchUserData = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      if (data) setCurrentUser(data as User);
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+      setError('Error fetching user data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string): Promise<User> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Find user in mock data
-      const user = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-      
-      if (!user) {
-        throw new Error('Invalid email or password');
-      }
-      
-      // In a real app, we would verify the password here
-      // For now, we're just checking that a password was provided
-      if (!password) {
-        throw new Error('Password is required');
-      }
-      
-      // Save user to localStorage and state
-      localStorage.setItem('fitnessAppUser', JSON.stringify(user));
-      setCurrentUser(user);
-      return user;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('No user data returned');
+
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (userError) throw userError;
+      if (!userData) throw new Error('User data not found');
+
+      setCurrentUser(userData as User);
+      return userData as User;
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An unexpected error occurred');
-      }
+      console.error('Login error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred during login');
       throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('fitnessAppUser');
+  const logout = async () => {
+    await supabase.auth.signOut();
     setCurrentUser(null);
   };
 

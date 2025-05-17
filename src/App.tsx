@@ -7,6 +7,7 @@ import RequireAuth from './components/auth/RequireAuth';
 // Pages
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import ClassesPage from './pages/ClassesPage';
 import MembersPage from './pages/MembersPage';
@@ -21,6 +22,7 @@ function App() {
             {/* Public Routes */}
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             
             {/* Protected Routes */}
@@ -45,7 +47,9 @@ function App() {
             <Route 
               path="/members" 
               element={
-                <MembersPage />
+                <RequireAuth allowedRoles={['admin', 'instructor']}>
+                  <MembersPage />
+                </RequireAuth>
               } 
             />
             
