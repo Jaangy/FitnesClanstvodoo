@@ -6,11 +6,13 @@ import Badge from '../ui/Badge';
 import { Calendar, Clock, MapPin, Search, Filter, User } from 'lucide-react';
 import { workoutSessions } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 const WorkoutList: React.FC = () => {
   const { currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState<string | null>(null);
   
   // Get current date
   const currentDate = new Date();
@@ -53,6 +55,34 @@ const WorkoutList: React.FC = () => {
       hour: 'numeric',
       minute: 'numeric',
     }).format(date);
+  };
+  
+  // Handle reservation
+  const handleReservation = async (sessionId: string) => {
+    if (!currentUser) return;
+    
+    setIsLoading(sessionId);
+    try {
+      const { data, error } = await supabase.rpc('create_reservation', {
+        p_user_id: currentUser.id,
+        p_session_id: sessionId
+      });
+
+      if (error) throw error;
+
+      if (!data.success) {
+        alert(data.message);
+        return;
+      }
+
+      // Refresh the page to show updated reservations
+      window.location.reload();
+    } catch (err) {
+      console.error('Error making reservation:', err);
+      alert('Failed to make reservation. Please try again.');
+    } finally {
+      setIsLoading(null);
+    }
   };
   
   // Check if user has already reserved a session
@@ -167,7 +197,9 @@ const WorkoutList: React.FC = () => {
                     <Button
                       variant={reservationStatus === 'confirmed' ? 'danger' : 'primary'}
                       size="sm"
-                      disabled={isFull && !reservationStatus}
+                      disabled={isFull && !reservationStatus || isLoading === session.id}
+                      onClick={() => handleReservation(session.id)}
+                      isLoading={isLoading === session.id}
                     >
                       {reservationStatus === 'confirmed' ? 'Cancel' : 
                        reservationStatus === 'pending' ? 'Pending' : 

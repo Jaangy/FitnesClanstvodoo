@@ -12,6 +12,7 @@ import DashboardPage from './pages/DashboardPage';
 import ClassesPage from './pages/ClassesPage';
 import MembersPage from './pages/MembersPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
+import MembershipPlansPage from './pages/MembershipPlansPage';
 
 function App() {
   return (
@@ -49,6 +50,15 @@ function App() {
               element={
                 <RequireAuth allowedRoles={['admin', 'instructor']}>
                   <MembersPage />
+                </RequireAuth>
+              } 
+            />
+
+            <Route 
+              path="/memberships" 
+              element={
+                <RequireAuth allowedRoles={['member']}>
+                  <MembershipPlansPage />
                 </RequireAuth>
               } 
             />
