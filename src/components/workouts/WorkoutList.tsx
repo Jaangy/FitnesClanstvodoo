@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WorkoutSession, ReservationStatus } from '../../types';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import { Calendar, Clock, MapPin, Search, Filter, User } from 'lucide-react';
-import { workoutSessions } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 
@@ -13,20 +12,58 @@ const WorkoutList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   
   // Get current date
   const currentDate = new Date();
   currentDate.setHours(0, 0, 0, 0);
+
+  // Fetch workout sessions from Supabase
+  useEffect(() => {
+    const fetchWorkoutSessions = async () => {
+      const { data, error } = await supabase
+        .from('workout_sessions')
+        .select(`
+          id,
+          date_time,
+          workouts (
+            id,
+            name,
+            description,
+            capacity,
+            duration,
+            location
+          )
+        `)
+        .gte('date_time', currentDate.toISOString())
+        .order('date_time', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching workout sessions:', error);
+        return;
+      }
+
+      // Transform the data to match our WorkoutSession type
+      const transformedSessions = data.map(session => ({
+        id: session.id,
+        dateTime: session.date_time,
+        name: session.workouts.name,
+        description: session.workouts.description,
+        capacity: session.workouts.capacity,
+        duration: session.workouts.duration,
+        location: session.workouts.location,
+        enrolledMembers: [] // This would need to be populated with actual enrollment data
+      }));
+
+      setWorkoutSessions(transformedSessions);
+    };
+
+    fetchWorkoutSessions();
+  }, []);
   
   // Filter workout sessions
   const filteredSessions = workoutSessions
     .filter(session => {
-      // Filter by date (only show future sessions)
-      const sessionDate = new Date(session.dateTime);
-      if (sessionDate < currentDate) {
-        return false;
-      }
-      
       // Filter by search term
       if (searchTerm && !session.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
           !session.description.toLowerCase().includes(searchTerm.toLowerCase())) {
@@ -39,8 +76,7 @@ const WorkoutList: React.FC = () => {
       }
       
       return true;
-    })
-    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+    });
   
   // Get unique workout types for filter
   const workoutTypes = ['all', ...new Set(workoutSessions.map(session => session.name))];
@@ -63,19 +99,24 @@ const WorkoutList: React.FC = () => {
     
     setIsLoading(sessionId);
     try {
-      const { data, error } = await supabase.rpc('create_reservation', {
-        p_user_id: currentUser.id,
-        p_session_id: sessionId
-      });
+      // First check if the session is a valid UUID
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId)) {
+        throw new Error('Invalid session ID format');
+      }
+
+      const { data, error } = await supabase
+        .from('reservations')
+        .insert({
+          user_id: currentUser.id,
+          workout_session_id: sessionId,
+          status: 'pending'
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      if (!data.success) {
-        alert(data.message);
-        return;
-      }
-
-      // Refresh the page to show updated reservations
+      // Refresh the workout sessions to show updated state
       window.location.reload();
     } catch (err) {
       console.error('Error making reservation:', err);
