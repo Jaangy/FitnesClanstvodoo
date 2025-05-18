@@ -96,14 +96,16 @@ const MemberDashboard: React.FC = () => {
               
               <div>
                 <p className="text-sm text-gray-500 mb-1">Status</p>
-                <Badge 
-                  variant={
-                    member.paymentStatus === 'active' ? 'success' : 
-                    member.paymentStatus === 'pending' ? 'warning' : 'danger'
-                  }
-                >
-                  {member.paymentStatus.toUpperCase()}
-                </Badge>
+                {member.paymentStatus && (
+                  <Badge 
+                    variant={
+                      member.paymentStatus === 'active' ? 'success' : 
+                      member.paymentStatus === 'pending' ? 'warning' : 'danger'
+                    }
+                  >
+                    {member.paymentStatus.toUpperCase()}
+                  </Badge>
+                )}
               </div>
               
               <Button variant="outline" fullWidth>
