@@ -26,9 +26,24 @@ const MemberDashboard: React.FC = () => {
           .from('memberships')
           .select('*')
           .eq('user_id', currentUser.id)
-          .single();
+          .eq('payment_status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (membershipError) throw membershipError;
+        if (membershipError) {
+          console.error('Error fetching membership:', membershipError);
+        }
+
+        // Set default member data even if no membership exists
+        const defaultMemberData = {
+          ...currentUser,
+          membershipType: membershipData?.type || 'none',
+          membershipStart: membershipData?.start_date || null,
+          membershipEnd: membershipData?.end_date || null,
+          paymentStatus: membershipData?.payment_status || 'expired',
+          reservations: []
+        };
 
         // Fetch upcoming reservations with workout session details
         const { data: reservationsData, error: reservationsError } = await supabase
@@ -53,10 +68,14 @@ const MemberDashboard: React.FC = () => {
           .gte('workout_sessions.date_time', new Date().toISOString())
           .order('workout_sessions.date_time', { ascending: true });
 
-        if (reservationsError) throw reservationsError;
+        if (reservationsError) {
+          console.error('Error fetching reservations:', reservationsError);
+          setMemberData(defaultMemberData);
+          return;
+        }
 
         // Transform the data
-        const transformedReservations = reservationsData
+        const transformedReservations = (reservationsData || [])
           .map(res => ({
             reservation: {
               id: res.id,
@@ -75,18 +94,19 @@ const MemberDashboard: React.FC = () => {
           }))
           .slice(0, 3); // Show only next 3 upcoming classes
 
-        setMemberData({
-          ...currentUser,
-          membershipType: membershipData.type,
-          membershipStart: membershipData.start_date,
-          membershipEnd: membershipData.end_date,
-          paymentStatus: membershipData.payment_status,
-          reservations: []
-        });
-
+        setMemberData(defaultMemberData);
         setUpcomingReservations(transformedReservations);
       } catch (err) {
-        console.error('Error fetching member data:', err);
+        console.error('Error in fetchMemberData:', err);
+        // Set default member data in case of error
+        setMemberData({
+          ...currentUser,
+          membershipType: 'none',
+          membershipStart: null,
+          membershipEnd: null,
+          paymentStatus: 'expired',
+          reservations: []
+        });
       }
     };
 
@@ -150,21 +170,19 @@ const MemberDashboard: React.FC = () => {
               
               <div>
                 <p className="text-sm text-gray-500 mb-1">Status</p>
-                {memberData.paymentStatus && (
-                  <Badge 
-                    variant={
-                      memberData.paymentStatus === 'active' ? 'success' : 
-                      memberData.paymentStatus === 'pending' ? 'warning' : 'danger'
-                    }
-                  >
-                    {memberData.paymentStatus.toUpperCase()}
-                  </Badge>
-                )}
+                <Badge 
+                  variant={
+                    memberData.paymentStatus === 'active' ? 'success' : 
+                    memberData.paymentStatus === 'pending' ? 'warning' : 'danger'
+                  }
+                >
+                  {memberData.paymentStatus.toUpperCase()}
+                </Badge>
               </div>
               
               <Link to="/memberships">
                 <Button variant="outline" fullWidth>
-                  Manage Membership
+                  {memberData.membershipType === 'none' ? 'Get Membership' : 'Manage Membership'}
                 </Button>
               </Link>
             </div>
