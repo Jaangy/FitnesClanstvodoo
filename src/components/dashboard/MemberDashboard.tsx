@@ -13,7 +13,7 @@ const MemberDashboard: React.FC = () => {
   const member = currentUser as Member;
 
   // Get upcoming reservations (filter confirmed reservations and sort by date)
-  const upcomingReservations = member.reservations
+  const upcomingReservations = (member?.reservations || [])
     .filter(res => res.status === 'confirmed')
     .map(res => {
       const session = workoutSessions.find(s => s.id === res.workoutSessionId);
@@ -50,6 +50,18 @@ const MemberDashboard: React.FC = () => {
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  if (!member) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="text-center py-8">
+            <p className="text-gray-500">Loading member information...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

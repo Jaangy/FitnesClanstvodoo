@@ -78,37 +78,16 @@ const RegisterForm: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Check if user already exists
-      const { data: existingUser, error: existingUserError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
-
-      if (existingUser?.user) {
-        setError('An account with this email already exists. Please sign in instead.');
-        setIsLoading(false);
-        return;
-      }
-
-      // 2. Sign up with Supabase Auth
+      // Sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
       });
 
-      if (authError) {
-        if (authError.message === 'User already registered') {
-          setError('An account with this email already exists. Please sign in instead.');
-          return;
-        }
-        throw authError;
-      }
+      if (authError) throw authError;
 
       if (authData.user) {
-        // Wait briefly to ensure auth session is established
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // 3. Insert user data into users table
+        // Insert user data into users table
         const { error: userError } = await supabase
           .from('users')
           .insert([
@@ -125,18 +104,14 @@ const RegisterForm: React.FC = () => {
 
         if (userError) throw userError;
 
-        // 4. Create default membership
-        const { error: membershipError } = await supabase
-          .from('memberships')
-          .insert([
-            {
-              user_id: authData.user.id,
-              type: 'none',
-              start_date: new Date().toISOString(),
-              end_date: new Date().toISOString(),
-              payment_status: 'pending',
-            },
-          ]);
+        // Create default membership using service role client
+        const { error: membershipError } = await supabase.rpc('create_initial_membership', {
+          user_id: authData.user.id,
+          membership_type: 'none',
+          start_date: new Date().toISOString(),
+          end_date: new Date().toISOString(),
+          status: 'pending'
+        });
 
         if (membershipError) throw membershipError;
 
