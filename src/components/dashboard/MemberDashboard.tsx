@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Member, Reservation, WorkoutSession } from '../../types';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '../ui/Card';
@@ -6,24 +6,92 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import { Calendar, Clock, MapPin, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { workoutSessions } from '../../data/mockData';
+import { supabase } from '../../lib/supabase';
 
 const MemberDashboard: React.FC = () => {
   const { currentUser } = useAuth();
-  const member = currentUser as Member;
+  const [memberData, setMemberData] = useState<Member | null>(null);
+  const [upcomingReservations, setUpcomingReservations] = useState<Array<{
+    reservation: Reservation;
+    session: WorkoutSession;
+  }>>([]);
 
-  // Get upcoming reservations (filter confirmed reservations and sort by date)
-  const upcomingReservations = (member?.reservations || [])
-    .filter(res => res.status === 'confirmed')
-    .map(res => {
-      const session = workoutSessions.find(s => s.id === res.workoutSessionId);
-      return { reservation: res, session };
-    })
-    .filter(item => item.session && new Date(item.session.dateTime) > new Date())
-    .sort((a, b) => {
-      return new Date(a.session!.dateTime).getTime() - new Date(b.session!.dateTime).getTime();
-    })
-    .slice(0, 3); // Show only the next 3 upcoming classes
+  useEffect(() => {
+    const fetchMemberData = async () => {
+      if (!currentUser) return;
+
+      try {
+        // Fetch member's data including membership
+        const { data: membershipData, error: membershipError } = await supabase
+          .from('memberships')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .single();
+
+        if (membershipError) throw membershipError;
+
+        // Fetch upcoming reservations with workout session details
+        const { data: reservationsData, error: reservationsError } = await supabase
+          .from('reservations')
+          .select(`
+            id,
+            status,
+            created_at,
+            workout_sessions (
+              id,
+              date_time,
+              workouts (
+                name,
+                description,
+                duration,
+                location
+              )
+            )
+          `)
+          .eq('user_id', currentUser.id)
+          .eq('status', 'confirmed')
+          .gte('workout_sessions.date_time', new Date().toISOString())
+          .order('workout_sessions.date_time', { ascending: true });
+
+        if (reservationsError) throw reservationsError;
+
+        // Transform the data
+        const transformedReservations = reservationsData
+          .map(res => ({
+            reservation: {
+              id: res.id,
+              status: res.status,
+              createdAt: res.created_at,
+              workoutSessionId: res.workout_sessions.id
+            } as Reservation,
+            session: {
+              id: res.workout_sessions.id,
+              dateTime: res.workout_sessions.date_time,
+              name: res.workout_sessions.workouts.name,
+              description: res.workout_sessions.workouts.description,
+              duration: res.workout_sessions.workouts.duration,
+              location: res.workout_sessions.workouts.location
+            } as WorkoutSession
+          }))
+          .slice(0, 3); // Show only next 3 upcoming classes
+
+        setMemberData({
+          ...currentUser,
+          membershipType: membershipData.type,
+          membershipStart: membershipData.start_date,
+          membershipEnd: membershipData.end_date,
+          paymentStatus: membershipData.payment_status,
+          reservations: []
+        });
+
+        setUpcomingReservations(transformedReservations);
+      } catch (err) {
+        console.error('Error fetching member data:', err);
+      }
+    };
+
+    fetchMemberData();
+  }, [currentUser]);
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -37,21 +105,7 @@ const MemberDashboard: React.FC = () => {
     }).format(date);
   };
 
-  // Get membership status class based on payment status
-  const getMembershipStatusClass = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'expired':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  if (!member) {
+  if (!memberData) {
     return (
       <div className="container mx-auto px-4 py-8">
         <Card>
@@ -78,39 +132,41 @@ const MemberDashboard: React.FC = () => {
               <div className="flex items-center space-x-2">
                 <User className="h-5 w-5 text-gray-500" />
                 <span className="font-medium text-gray-700">
-                  {member.firstName} {member.lastName}
+                  {memberData.firstName} {memberData.lastName}
                 </span>
               </div>
               
               <div>
                 <p className="text-sm text-gray-500 mb-1">Membership Type</p>
-                <p className="font-medium text-gray-900 capitalize">{member.membershipType}</p>
+                <p className="font-medium text-gray-900 capitalize">{memberData.membershipType}</p>
               </div>
               
               <div>
                 <p className="text-sm text-gray-500 mb-1">Valid Until</p>
                 <p className="font-medium text-gray-900">
-                  {new Date(member.membershipEnd).toLocaleDateString()}
+                  {memberData.membershipEnd ? new Date(memberData.membershipEnd).toLocaleDateString() : 'Not set'}
                 </p>
               </div>
               
               <div>
                 <p className="text-sm text-gray-500 mb-1">Status</p>
-                {member.paymentStatus && (
+                {memberData.paymentStatus && (
                   <Badge 
                     variant={
-                      member.paymentStatus === 'active' ? 'success' : 
-                      member.paymentStatus === 'pending' ? 'warning' : 'danger'
+                      memberData.paymentStatus === 'active' ? 'success' : 
+                      memberData.paymentStatus === 'pending' ? 'warning' : 'danger'
                     }
                   >
-                    {member.paymentStatus.toUpperCase()}
+                    {memberData.paymentStatus.toUpperCase()}
                   </Badge>
                 )}
               </div>
               
-              <Button variant="outline" fullWidth>
-                Renew Membership
-              </Button>
+              <Link to="/memberships">
+                <Button variant="outline" fullWidth>
+                  Manage Membership
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
@@ -120,7 +176,7 @@ const MemberDashboard: React.FC = () => {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Upcoming Classes</CardTitle>
-              <Link to="/reservations">
+              <Link to="/classes">
                 <Button variant="ghost" size="sm">View All</Button>
               </Link>
             </div>
@@ -135,8 +191,8 @@ const MemberDashboard: React.FC = () => {
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="font-semibold text-gray-900">{session?.name}</h4>
-                        <p className="text-sm text-gray-500">{session?.description}</p>
+                        <h4 className="font-semibold text-gray-900">{session.name}</h4>
+                        <p className="text-sm text-gray-500">{session.description}</p>
                       </div>
                       <Badge variant="default">{reservation.status}</Badge>
                     </div>
@@ -144,15 +200,15 @@ const MemberDashboard: React.FC = () => {
                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="flex items-center text-sm">
                         <Calendar size={16} className="mr-2 text-gray-500" />
-                        <span>{formatDate(session?.dateTime || '')}</span>
+                        <span>{formatDate(session.dateTime)}</span>
                       </div>
                       <div className="flex items-center text-sm">
                         <Clock size={16} className="mr-2 text-gray-500" />
-                        <span>{session?.duration} minutes</span>
+                        <span>{session.duration} minutes</span>
                       </div>
                       <div className="flex items-center text-sm">
                         <MapPin size={16} className="mr-2 text-gray-500" />
-                        <span>{session?.location}</span>
+                        <span>{session.location}</span>
                       </div>
                     </div>
                     

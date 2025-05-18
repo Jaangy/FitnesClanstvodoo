@@ -13,53 +13,78 @@ const WorkoutList: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
+  const [reservations, setReservations] = useState<Record<string, ReservationStatus>>({});
   
   // Get current date
   const currentDate = new Date();
   currentDate.setHours(0, 0, 0, 0);
 
-  // Fetch workout sessions from Supabase
+  // Fetch workout sessions and reservations
   useEffect(() => {
-    const fetchWorkoutSessions = async () => {
-      const { data, error } = await supabase
-        .from('workout_sessions')
-        .select(`
-          id,
-          date_time,
-          workouts (
+    const fetchData = async () => {
+      try {
+        // Fetch workout sessions
+        const { data: sessionsData, error: sessionsError } = await supabase
+          .from('workout_sessions')
+          .select(`
             id,
-            name,
-            description,
-            capacity,
-            duration,
-            location
-          )
-        `)
-        .gte('date_time', currentDate.toISOString())
-        .order('date_time', { ascending: true });
+            date_time,
+            workout_id,
+            workouts (
+              id,
+              name,
+              description,
+              capacity,
+              duration,
+              location
+            ),
+            reservations (
+              id,
+              status
+            )
+          `)
+          .gte('date_time', currentDate.toISOString())
+          .order('date_time', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching workout sessions:', error);
-        return;
+        if (sessionsError) throw sessionsError;
+
+        // Transform the data
+        const transformedSessions = sessionsData.map(session => ({
+          id: session.id,
+          dateTime: session.date_time,
+          name: session.workouts.name,
+          description: session.workouts.description,
+          capacity: session.workouts.capacity,
+          duration: session.workouts.duration,
+          location: session.workouts.location,
+          enrolledMembers: session.reservations.filter(r => r.status === 'confirmed').map(r => r.id)
+        }));
+
+        setWorkoutSessions(transformedSessions);
+
+        // If user is logged in, fetch their reservations
+        if (currentUser) {
+          const { data: userReservations, error: reservationsError } = await supabase
+            .from('reservations')
+            .select('workout_session_id, status')
+            .eq('user_id', currentUser.id);
+
+          if (reservationsError) throw reservationsError;
+
+          const reservationsMap = userReservations.reduce((acc, res) => ({
+            ...acc,
+            [res.workout_session_id]: res.status as ReservationStatus
+          }), {});
+
+          setReservations(reservationsMap);
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
       }
-
-      // Transform the data to match our WorkoutSession type
-      const transformedSessions = data.map(session => ({
-        id: session.id,
-        dateTime: session.date_time,
-        name: session.workouts.name,
-        description: session.workouts.description,
-        capacity: session.workouts.capacity,
-        duration: session.workouts.duration,
-        location: session.workouts.location,
-        enrolledMembers: [] // This would need to be populated with actual enrollment data
-      }));
-
-      setWorkoutSessions(transformedSessions);
     };
 
-    fetchWorkoutSessions();
-  }, []);
+    fetchData();
+  }, [currentUser]);
   
   // Filter workout sessions
   const filteredSessions = workoutSessions
@@ -99,25 +124,31 @@ const WorkoutList: React.FC = () => {
     
     setIsLoading(sessionId);
     try {
-      // First check if the session is a valid UUID
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId)) {
-        throw new Error('Invalid session ID format');
-      }
-
-      const { data, error } = await supabase
-        .from('reservations')
-        .insert({
-          user_id: currentUser.id,
-          workout_session_id: sessionId,
-          status: 'pending'
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('create_reservation', {
+        p_user_id: currentUser.id,
+        p_session_id: sessionId
+      });
 
       if (error) throw error;
 
-      // Refresh the workout sessions to show updated state
-      window.location.reload();
+      if (data.success) {
+        // Update local state
+        setReservations(prev => ({
+          ...prev,
+          [sessionId]: 'confirmed'
+        }));
+
+        // Update enrolled members count
+        setWorkoutSessions(prev => 
+          prev.map(session => 
+            session.id === sessionId 
+              ? { ...session, enrolledMembers: [...session.enrolledMembers, currentUser.id] }
+              : session
+          )
+        );
+      } else {
+        alert(data.message);
+      }
     } catch (err) {
       console.error('Error making reservation:', err);
       alert('Failed to make reservation. Please try again.');
@@ -128,12 +159,7 @@ const WorkoutList: React.FC = () => {
   
   // Check if user has already reserved a session
   const isSessionReserved = (session: WorkoutSession): ReservationStatus | null => {
-    if (!currentUser || currentUser.role !== 'member') return null;
-    
-    const userReservations = (currentUser as any).reservations || [];
-    const reservation = userReservations.find((r: any) => r.workoutSessionId === session.id);
-    
-    return reservation ? reservation.status : null;
+    return reservations[session.id] || null;
   };
   
   // Check if session is full
