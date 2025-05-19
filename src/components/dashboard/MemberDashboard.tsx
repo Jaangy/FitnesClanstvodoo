@@ -18,7 +18,7 @@ const MemberDashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchMemberData = async () => {
-      if (!currentUser?.id) {
+      if (!currentUser) {
         console.log('No current user found, skipping data fetch');
         return;
       }
