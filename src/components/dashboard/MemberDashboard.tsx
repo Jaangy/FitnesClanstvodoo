@@ -66,7 +66,7 @@ const MemberDashboard: React.FC = () => {
           .eq('user_id', currentUser.id)
           .eq('status', 'confirmed')
           .gte('workout_sessions.date_time', new Date().toISOString())
-          .order('workout_sessions.date_time', { ascending: true });
+          .order('workout_sessions(date_time)', { ascending: true, nullsLast: true });
 
         if (reservationsError) {
           console.error('Error fetching reservations:', reservationsError);
