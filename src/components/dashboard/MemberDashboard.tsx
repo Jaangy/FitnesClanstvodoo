@@ -18,7 +18,10 @@ const MemberDashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchMemberData = async () => {
-      if (!currentUser) return;
+      if (!currentUser?.id) {
+        console.log('No current user found, skipping data fetch');
+        return;
+      }
 
       try {
         // Fetch member's data including membership
@@ -98,6 +101,8 @@ const MemberDashboard: React.FC = () => {
         setUpcomingReservations(transformedReservations);
       } catch (err) {
         console.error('Error in fetchMemberData:', err);
+        if (!currentUser) return;
+        
         // Set default member data in case of error
         setMemberData({
           ...currentUser,
@@ -124,6 +129,18 @@ const MemberDashboard: React.FC = () => {
       minute: 'numeric',
     }).format(date);
   };
+
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="text-center py-8">
+            <p className="text-gray-500">Please log in to view your dashboard.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!memberData) {
     return (
