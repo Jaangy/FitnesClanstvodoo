@@ -55,7 +55,8 @@ const MembershipPlansPage: React.FC = () => {
     try {
       const { data, error } = await supabase.rpc('update_membership', {
         p_user_id: currentUser.id,
-        p_type: planType
+        p_type: planType,
+        p_payment_status: 'active' // Set as active immediately for demo purposes
       });
 
       if (error) throw error;
