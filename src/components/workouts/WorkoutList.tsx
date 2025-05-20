@@ -6,8 +6,10 @@ import Badge from '../ui/Badge';
 import { Calendar, Clock, MapPin, Search, Filter, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 const WorkoutList: React.FC = () => {
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
@@ -146,6 +148,9 @@ const WorkoutList: React.FC = () => {
               : session
           )
         );
+
+        // Navigate to dashboard to show the reservation
+        navigate('/dashboard');
       } else {
         alert(data.message);
       }
