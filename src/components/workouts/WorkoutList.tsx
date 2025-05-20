@@ -161,6 +161,44 @@ const WorkoutList: React.FC = () => {
       setIsLoading(null);
     }
   };
+
+  // Handle cancellation
+  const handleCancellation = async (sessionId: string) => {
+    if (!currentUser) return;
+    
+    setIsLoading(sessionId);
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('workout_session_id', sessionId);
+
+      if (error) throw error;
+
+      // Update local state
+      setReservations(prev => {
+        const newReservations = { ...prev };
+        delete newReservations[sessionId];
+        return newReservations;
+      });
+
+      // Update enrolled members count
+      setWorkoutSessions(prev => 
+        prev.map(session => 
+          session.id === sessionId 
+            ? { ...session, enrolledMembers: session.enrolledMembers.filter(id => id !== currentUser.id) }
+            : session
+        )
+      );
+
+    } catch (err) {
+      console.error('Error cancelling reservation:', err);
+      alert('Failed to cancel reservation. Please try again.');
+    } finally {
+      setIsLoading(null);
+    }
+  };
   
   // Check if user has already reserved a session
   const isSessionReserved = (session: WorkoutSession): ReservationStatus | null => {
@@ -269,8 +307,11 @@ const WorkoutList: React.FC = () => {
                     <Button
                       variant={reservationStatus === 'confirmed' ? 'danger' : 'primary'}
                       size="sm"
-                      disabled={isFull && !reservationStatus || isLoading === session.id}
-                      onClick={() => handleReservation(session.id)}
+                      disabled={(!reservationStatus && isFull) || isLoading === session.id}
+                      onClick={() => reservationStatus === 'confirmed' 
+                        ? handleCancellation(session.id)
+                        : handleReservation(session.id)
+                      }
                       isLoading={isLoading === session.id}
                     >
                       {reservationStatus === 'confirmed' ? 'Cancel' : 
