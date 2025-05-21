@@ -13,6 +13,7 @@ import ClassesPage from './pages/ClassesPage';
 import MembersPage from './pages/MembersPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import MembershipPlansPage from './pages/MembershipPlansPage';
+import ProfilePage from './pages/ProfilePage';
 
 function App() {
   return (
@@ -59,6 +60,15 @@ function App() {
               element={
                 <RequireAuth allowedRoles={['member']}>
                   <MembershipPlansPage />
+                </RequireAuth>
+              } 
+            />
+
+            <Route 
+              path="/profile" 
+              element={
+                <RequireAuth>
+                  <ProfilePage />
                 </RequireAuth>
               } 
             />
