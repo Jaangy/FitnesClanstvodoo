@@ -14,6 +14,7 @@ import MembersPage from './pages/MembersPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 import MembershipPlansPage from './pages/MembershipPlansPage';
 import ProfilePage from './pages/ProfilePage';
+import ReservationsPage from './pages/ReservationsPage';
 
 function App() {
   return (
@@ -69,6 +70,15 @@ function App() {
               element={
                 <RequireAuth>
                   <ProfilePage />
+                </RequireAuth>
+              } 
+            />
+
+            <Route 
+              path="/reservations" 
+              element={
+                <RequireAuth>
+                  <ReservationsPage />
                 </RequireAuth>
               } 
             />
